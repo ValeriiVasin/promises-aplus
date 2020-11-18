@@ -1,0 +1,21 @@
+{
+  "name": "my-promise-aplus",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Implementation of Promises A+ spec",
+  "main": "dist/promise.js",
+  "scripts": {
+    "pretest": "npm run build",
+    "test": "promises-aplus-tests dist/adapter",
+    "build": "tsc"
+  },
+  "keywords": [],
+  "author": "Valerii Vasin",
+  "license": "ISC",
+  "devDependencies": {
+    "@tsconfig/node14": "^1.0.0",
+    "@types/node": "^12.19.5",
+    "promises-aplus-tests": "*",
+    "typescript": "^4.0.5"
+  }
+}
