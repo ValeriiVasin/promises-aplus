@@ -1,5 +1,5 @@
-type TOptFunc = null | undefined | ((v: any) => void);
-type RejectFn = (message?: string) => any;
+type TOptFunc = null | undefined | ((v: any) => any);
+type RejectFn = (message?: string | TypeError) => any;
 type ResolveFn = (value?: any) => any;
 type PromiseCallback = (resolve: ResolveFn, reject: RejectFn) => void;
 
@@ -49,13 +49,23 @@ export class MyPromise {
   }
 
   then(onFulfilled?: TOptFunc, onRejected?: TOptFunc): MyPromise {
-    return new MyPromise((resolve, reject) => {
-      this.#resolvers.push(this.safe(onFulfilled, resolve, reject));
+    const promise = new MyPromise((resolve, reject) => {
+      this.#resolvers.push(
+        this.safe(onFulfilled, resolve, reject, {
+          rejection: false,
+          p: () => promise,
+        })
+      );
       this.#catchers.push(
-        this.safe(onRejected, resolve, reject, { rejection: true })
+        this.safe(onRejected, resolve, reject, {
+          rejection: true,
+          p: () => promise,
+        })
       );
       this.drain();
     });
+
+    return promise;
   }
 
   catch(fn?: TOptFunc) {
@@ -63,10 +73,14 @@ export class MyPromise {
       return this;
     }
 
-    return new MyPromise((resolve, reject) => {
-      this.#catchers.push(this.safe(fn, resolve, reject, { rejection: true }));
+    const promise = new MyPromise((resolve, reject) => {
+      this.#catchers.push(
+        this.safe(fn, resolve, reject, { rejection: true, p: () => promise })
+      );
       this.drain();
     });
+
+    return promise;
   }
 
   fulfill(fn?: TOptFunc) {
@@ -74,17 +88,21 @@ export class MyPromise {
       return this;
     }
 
-    return new MyPromise((resolve, reject) => {
-      this.#resolvers.push(this.safe(fn, resolve, reject));
+    const promise = new MyPromise((resolve, reject) => {
+      this.#resolvers.push(
+        this.safe(fn, resolve, reject, { rejection: false, p: () => promise })
+      );
       this.drain();
     });
+
+    return promise;
   }
 
   private safe(
     fn: TOptFunc,
     resolve: ResolveFn,
     reject: RejectFn,
-    { rejection }: { rejection: boolean } = { rejection: false }
+    { rejection, p }: { rejection: boolean; p: () => MyPromise }
   ) {
     return (v: any) => {
       if (typeof fn !== 'function') {
@@ -99,6 +117,12 @@ export class MyPromise {
 
       try {
         const result = fn(v);
+
+        if (result === p()) {
+          reject(new TypeError('Same promise returned'));
+          return;
+        }
+
         resolve(result);
       } catch (err) {
         reject(err);
