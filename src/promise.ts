@@ -123,9 +123,23 @@ export class MyPromise {
           return;
         }
 
-        // @todo: just check `.then`
         if (result instanceof MyPromise) {
           result.then(resolve, reject);
+          return;
+        }
+
+        if (
+          (result && typeof result === 'object') ||
+          typeof result === 'function'
+        ) {
+          const then = result.then;
+
+          if (typeof then === 'function') {
+            then.call(result, resolve, reject);
+            return;
+          }
+
+          resolve(result);
           return;
         }
 
@@ -146,12 +160,14 @@ export class MyPromise {
     }
 
     if (this.#state === PromiseState.Fulfilled) {
+      this.#catchers = [];
       while (this.#resolvers.length) {
         this.#resolvers.shift()?.(this.#value);
       }
       return;
     }
 
+    this.#resolvers = [];
     while (this.#catchers.length) {
       this.#catchers.shift()?.(this.#value);
     }
