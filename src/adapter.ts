@@ -4,6 +4,9 @@ function noop() {}
 process.on('unhandledRejection', noop);
 process.on('rejectionHandled', noop);
 
+import { MyPromise } from './promise';
+const Promise = MyPromise;
+
 export function resolved(value: any) {
   return Promise.resolve(value);
 }
