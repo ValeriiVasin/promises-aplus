@@ -116,34 +116,8 @@ export class MyPromise {
       }
 
       try {
-        const result = fn(v);
-
-        if (result === p()) {
-          reject(new TypeError('Same promise returned'));
-          return;
-        }
-
-        if (result instanceof MyPromise) {
-          result.then(resolve, reject);
-          return;
-        }
-
-        if (
-          (result && typeof result === 'object') ||
-          typeof result === 'function'
-        ) {
-          const then = result.then;
-
-          if (typeof then === 'function') {
-            then.call(result, resolve, reject);
-            return;
-          }
-
-          resolve(result);
-          return;
-        }
-
-        resolve(result);
+        const value = fn(v);
+        resolveValue(value, { resolve, reject, getPromise: p });
       } catch (err) {
         reject(err);
       }
@@ -172,4 +146,39 @@ export class MyPromise {
       this.#catchers.shift()?.(this.#value);
     }
   }
+}
+
+function resolveValue(
+  value: any,
+  {
+    resolve,
+    reject,
+    getPromise,
+  }: { resolve: ResolveFn; reject: RejectFn; getPromise: () => MyPromise }
+) {
+  const onResolve = (value: any) =>
+    resolveValue(value, { resolve, reject, getPromise });
+
+  const promise = getPromise();
+  if (value === promise) {
+    reject(new TypeError('Same promise returned'));
+    return;
+  }
+
+  if (value instanceof MyPromise) {
+    value.then(onResolve, reject);
+    return;
+  }
+
+  if ((value && typeof value === 'object') || typeof value === 'function') {
+    if (typeof value.then === 'function') {
+      value.then(onResolve, reject);
+      return;
+    }
+
+    resolve(value);
+    return;
+  }
+
+  resolve(value);
 }

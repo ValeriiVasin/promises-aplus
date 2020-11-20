@@ -1,10 +1,19 @@
-import { MyPromise } from './promise';
-
 const log = (msg: string) => (v: any) => console.log(msg, v);
 
-// MyPromise.resolve(5).then(log('directly resolved'), log('FALSE'));
-// MyPromise.reject(90).then(log('FALSE'), log('directly rejected'));
+const syncThenable = {
+  then(resolve: any, reject: any) {
+    resolve('sync');
+  },
+};
 
-const p: any = MyPromise.resolve().then(() => p);
+const asyncThenable = {
+  then(resolve: any, reject: any) {
+    setTimeout(() => resolve('async'), 100);
+  },
+};
 
-p.then(log('it should not be resolved'), log('should be rejected'));
+Promise.resolve(100)
+  .then(() => {
+    return syncThenable;
+  })
+  .then(log('value >>'));
