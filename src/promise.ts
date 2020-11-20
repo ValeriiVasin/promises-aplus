@@ -156,29 +156,33 @@ function resolveValue(
     getPromise,
   }: { resolve: ResolveFn; reject: RejectFn; getPromise: () => MyPromise }
 ) {
-  const onResolve = (value: any) =>
-    resolveValue(value, { resolve, reject, getPromise });
+  try {
+    const onResolve = (value: any) =>
+      resolveValue(value, { resolve, reject, getPromise });
 
-  const promise = getPromise();
-  if (value === promise) {
-    reject(new TypeError('Same promise returned'));
-    return;
-  }
+    const promise = getPromise();
+    if (value === promise) {
+      reject(new TypeError('Promise should not return itself'));
+      return;
+    }
 
-  if (value instanceof MyPromise) {
-    value.then(onResolve, reject);
-    return;
-  }
-
-  if ((value && typeof value === 'object') || typeof value === 'function') {
-    if (typeof value.then === 'function') {
+    if (value instanceof MyPromise) {
       value.then(onResolve, reject);
       return;
     }
 
-    resolve(value);
-    return;
-  }
+    if ((value && typeof value === 'object') || typeof value === 'function') {
+      if (typeof value.then === 'function') {
+        value.then(onResolve, reject);
+        return;
+      }
 
-  resolve(value);
+      resolve(value);
+      return;
+    }
+
+    resolve(value);
+  } catch (e) {
+    reject(e);
+  }
 }
