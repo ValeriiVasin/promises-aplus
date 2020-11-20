@@ -148,6 +148,7 @@ export class MyPromise {
   }
 }
 
+// https://github.com/promises-aplus/promises-spec#the-promise-resolution-procedure
 function resolveValue(
   value: any,
   {
