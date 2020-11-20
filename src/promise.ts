@@ -123,6 +123,12 @@ export class MyPromise {
           return;
         }
 
+        // @todo: just check `.then`
+        if (result instanceof MyPromise) {
+          result.then(resolve, reject);
+          return;
+        }
+
         resolve(result);
       } catch (err) {
         reject(err);
