@@ -167,7 +167,7 @@ function resolveValue(
     }
 
     if (value instanceof MyPromise) {
-      value.then(onResolve, reject);
+      value.then(resolve, reject);
       return;
     }
 
