@@ -9,6 +9,19 @@ enum PromiseState {
   Rejected,
 }
 
+function once(fn: (...args: any[]) => any): (...args: any[]) => any {
+  let result: any;
+  let wasCalled = false;
+
+  return (...args: any) => {
+    if (wasCalled) {
+      return result;
+    }
+    wasCalled = true;
+    result = fn(...args);
+  };
+}
+
 export class MyPromise {
   #value: any;
   #state: PromiseState = PromiseState.Pending;
@@ -50,78 +63,38 @@ export class MyPromise {
 
   then(onFulfilled?: TOptFunc, onRejected?: TOptFunc): MyPromise {
     const promise = new MyPromise((resolve, reject) => {
-      this.#resolvers.push(
-        this.safe(onFulfilled, resolve, reject, {
-          rejection: false,
-          p: () => promise,
-        })
-      );
-      this.#catchers.push(
-        this.safe(onRejected, resolve, reject, {
-          rejection: true,
-          p: () => promise,
-        })
-      );
-      this.drain();
-    });
+      const getPromise = () => promise;
 
-    return promise;
-  }
-
-  catch(fn?: TOptFunc) {
-    if (typeof fn !== 'function') {
-      return this;
-    }
-
-    const promise = new MyPromise((resolve, reject) => {
-      this.#catchers.push(
-        this.safe(fn, resolve, reject, { rejection: true, p: () => promise })
-      );
-      this.drain();
-    });
-
-    return promise;
-  }
-
-  fulfill(fn?: TOptFunc) {
-    if (typeof fn !== 'function') {
-      return this;
-    }
-
-    const promise = new MyPromise((resolve, reject) => {
-      this.#resolvers.push(
-        this.safe(fn, resolve, reject, { rejection: false, p: () => promise })
-      );
-      this.drain();
-    });
-
-    return promise;
-  }
-
-  private safe(
-    fn: TOptFunc,
-    resolve: ResolveFn,
-    reject: RejectFn,
-    { rejection, p }: { rejection: boolean; p: () => MyPromise }
-  ) {
-    return (v: any) => {
-      if (typeof fn !== 'function') {
-        if (rejection) {
-          reject(v);
-          return;
+      const resolver = (value: any) => {
+        try {
+          resolveValue(callOrIdentity(value, onFulfilled), {
+            resolve,
+            reject,
+            getPromise,
+          });
+        } catch (e) {
+          reject(e);
         }
+      };
+      const rejector = (reason: any) => {
+        try {
+          if (typeof onRejected !== 'function') {
+            reject(reason);
+            return;
+          }
 
-        resolve(v);
-        return;
-      }
+          resolveValue(onRejected(reason), { resolve, reject, getPromise });
+        } catch (e) {
+          reject(e);
+        }
+      };
 
-      try {
-        const value = fn(v);
-        resolveValue(value, { resolve, reject, getPromise: p });
-      } catch (err) {
-        reject(err);
-      }
-    };
+      this.#resolvers.push(resolver);
+      this.#catchers.push(rejector);
+      this.drain();
+    });
+
+    return promise;
   }
 
   private drain() {
@@ -146,6 +119,10 @@ export class MyPromise {
       this.#catchers.shift()?.(this.#value);
     }
   }
+}
+
+function callOrIdentity(value: any, fn: TOptFunc) {
+  return typeof fn === 'function' ? fn(value) : value;
 }
 
 // https://github.com/promises-aplus/promises-spec#the-promise-resolution-procedure
