@@ -4,30 +4,20 @@ const log = (msg: string) => (v: any) => console.log(msg, v);
 
 const sentinel = { sentinel: 'sentinel' };
 
-function createOneTimeThenable(value: any) {
-  var numberOfTimesThenRetrieved = 0;
-  return Object.create(null, {
-    then: {
-      get: function () {
-        if (numberOfTimesThenRetrieved === 0) {
-          ++numberOfTimesThenRetrieved;
-          return function (onFulfilled: any) {
-            onFulfilled(value);
-          };
-        }
-        return null;
-      },
+function thenable(value: any) {
+  return {
+    then: function (onFulfilled: (value: any) => any) {
+      onFulfilled(value);
+      throw 421;
     },
-  });
+  };
 }
-
-const syncThenable = createOneTimeThenable(sentinel);
 
 const x = {
   then(resolve: any, reject: any) {
-    resolve(syncThenable);
+    resolve(thenable(sentinel));
   },
 };
 
-Promise.resolve(x).then(log('should'));
-MyPromise.resolve(x).then(log('is'));
+//Promise.resolve(x).then(log('should'));
+MyPromise.resolve(x).then(log('is'), log('thrown'));

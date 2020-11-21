@@ -148,6 +148,8 @@ function resolveValue(
     const onResolve = (value: any) =>
       resolveValue(value, { resolve, reject, getPromise });
 
+    const wrapped = wrapResolveReject({ resolve: onResolve, reject });
+
     const promise = getPromise();
     if (value === promise) {
       reject(new TypeError('Promise should not return itself'));
@@ -163,7 +165,11 @@ function resolveValue(
       let then = value.then;
 
       if (typeof then === 'function') {
-        then.call(value, onResolve, reject);
+        try {
+          then.call(value, wrapped.resolve, wrapped.reject);
+        } catch (e) {
+          wrapped.reject(e);
+        }
         return;
       }
 
@@ -175,4 +181,42 @@ function resolveValue(
   } catch (e) {
     reject(e);
   }
+}
+
+// inside of value resolution function for thenable
+// we should:
+// - global control that only reject or resolved called
+// - it is called only once
+// - if it throws inside of `.then()` call, but was resolved before - ignore
+function wrapResolveReject({
+  resolve,
+  reject,
+}: {
+  resolve: ResolveFn;
+  reject: RejectFn;
+}): { resolve: ResolveFn; reject: RejectFn } {
+  let isDone = false;
+
+  const wrappedResolve = once((...args: any[]) => {
+    if (isDone) {
+      return;
+    }
+
+    isDone = true;
+    resolve(...args);
+  });
+
+  const wrappedReject = once((...args: any[]) => {
+    if (isDone) {
+      return;
+    }
+
+    isDone = true;
+    reject(...args);
+  });
+
+  return {
+    resolve: wrappedResolve,
+    reject: wrappedReject,
+  };
 }
