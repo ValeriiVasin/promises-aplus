@@ -38,7 +38,7 @@ export class MyPromise {
   }
 
   constructor(callback: PromiseCallback) {
-    const resolve: ResolveFn = (value) => {
+    const resolve: ResolveFn = once((value) => {
       if (this.#state !== PromiseState.Pending) {
         return;
       }
@@ -46,9 +46,9 @@ export class MyPromise {
       this.#state = PromiseState.Fulfilled;
       this.#value = value;
       this.drain();
-    };
+    });
 
-    const reject: RejectFn = (message) => {
+    const reject: RejectFn = once((message) => {
       if (this.#state !== PromiseState.Pending) {
         return;
       }
@@ -56,7 +56,7 @@ export class MyPromise {
       this.#state = PromiseState.Rejected;
       this.#value = message;
       this.drain();
-    };
+    });
 
     callback(resolve, reject);
   }
@@ -66,23 +66,25 @@ export class MyPromise {
       const getPromise = () => promise;
 
       const resolver = (value: any) => {
+        if (typeof onFulfilled !== 'function') {
+          resolve(value);
+          return;
+        }
+
         try {
-          resolveValue(callOrIdentity(value, onFulfilled), {
-            resolve,
-            reject,
-            getPromise,
-          });
+          resolveValue(onFulfilled(value), { resolve, reject, getPromise });
         } catch (e) {
           reject(e);
         }
       };
-      const rejector = (reason: any) => {
-        try {
-          if (typeof onRejected !== 'function') {
-            reject(reason);
-            return;
-          }
 
+      const rejector = (reason: any) => {
+        if (typeof onRejected !== 'function') {
+          reject(reason);
+          return;
+        }
+
+        try {
           resolveValue(onRejected(reason), { resolve, reject, getPromise });
         } catch (e) {
           reject(e);
@@ -121,10 +123,6 @@ export class MyPromise {
   }
 }
 
-function callOrIdentity(value: any, fn: TOptFunc) {
-  return typeof fn === 'function' ? fn(value) : value;
-}
-
 // https://github.com/promises-aplus/promises-spec#the-promise-resolution-procedure
 function resolveValue(
   value: any,
@@ -150,8 +148,10 @@ function resolveValue(
     }
 
     if ((value && typeof value === 'object') || typeof value === 'function') {
-      if (typeof value.then === 'function') {
-        value.then(onResolve, reject);
+      let then = value.then;
+
+      if (typeof then === 'function') {
+        then.call(value, onResolve, reject);
         return;
       }
 
