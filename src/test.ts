@@ -29,10 +29,5 @@ const x = {
   },
 };
 
-MyPromise.resolve(x).then(log('>>'));
-
-Promise.reject(5)
-  .then(null, () => {
-    return 10;
-  })
-  .then(log('resolve'), log('reject'));
+Promise.resolve(x).then(log('should'));
+MyPromise.resolve(x).then(log('is'));

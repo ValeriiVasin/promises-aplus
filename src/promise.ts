@@ -24,6 +24,7 @@ function once(fn: (...args: any[]) => any): (...args: any[]) => any {
 
 export class MyPromise {
   #value: any;
+  #isPending = true;
   #state: PromiseState = PromiseState.Pending;
 
   #resolvers: ResolveFn[] = [];
@@ -38,24 +39,38 @@ export class MyPromise {
   }
 
   constructor(callback: PromiseCallback) {
-    const resolve: ResolveFn = once((value) => {
-      if (this.#state !== PromiseState.Pending) {
-        return;
-      }
-
+    const __resolve = (value: any) => {
       this.#state = PromiseState.Fulfilled;
       this.#value = value;
       this.drain();
-    });
+    };
 
-    const reject: RejectFn = once((message) => {
-      if (this.#state !== PromiseState.Pending) {
+    const __reject = (reason: any) => {
+      this.#state = PromiseState.Rejected;
+      this.#value = reason;
+      this.drain();
+    };
+
+    const resolve: ResolveFn = once((value) => {
+      if (!this.#isPending) {
         return;
       }
 
-      this.#state = PromiseState.Rejected;
-      this.#value = message;
-      this.drain();
+      this.#isPending = false;
+      resolveValue(value, {
+        resolve: __resolve,
+        reject: __reject,
+        getPromise: () => this,
+      });
+    });
+
+    const reject: RejectFn = once((reason: any) => {
+      if (!this.#isPending) {
+        return;
+      }
+
+      this.#isPending = false;
+      __reject(reason);
     });
 
     callback(resolve, reject);
@@ -66,13 +81,10 @@ export class MyPromise {
       const getPromise = () => promise;
 
       const resolver = (value: any) => {
-        if (typeof onFulfilled !== 'function') {
-          resolve(value);
-          return;
-        }
-
         try {
-          resolveValue(onFulfilled(value), { resolve, reject, getPromise });
+          resolve(
+            typeof onFulfilled === 'function' ? onFulfilled(value) : value
+          );
         } catch (e) {
           reject(e);
         }
