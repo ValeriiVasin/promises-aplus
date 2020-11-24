@@ -1,5 +1,7 @@
 # Promise A+
 
+![ci status](https://github.com/ValeriiVasin/promises-aplus/workflows/ci/badge.svg)
+
 Implementation of Promises/A+ specification.
 
 _Educational purposes only._
