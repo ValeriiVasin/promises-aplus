@@ -1,7 +1,7 @@
 type TOptFunc = null | undefined | ((v: any) => any);
-type RejectFn = (message?: string | TypeError) => any;
+type RejectFn = (reason?: any) => any;
 type ResolveFn = (value?: any) => any;
-type PromiseCallback = (resolve: ResolveFn, reject: RejectFn) => void;
+type PromiseCallback = (resolve: ResolveFn, reject: RejectFn) => any;
 
 enum PromiseState {
   Pending,
@@ -9,16 +9,17 @@ enum PromiseState {
   Rejected,
 }
 
-function once(fn: (...args: any[]) => any): (...args: any[]) => any {
-  let result: any;
+function once<T extends (...args: any[]) => any>(fn: T) {
+  let result: ReturnType<T>;
   let wasCalled = false;
 
-  return (...args: any) => {
+  return (...args: Parameters<T>): ReturnType<T> => {
     if (wasCalled) {
       return result;
     }
     wasCalled = true;
     result = fn(...args);
+    return result;
   };
 }
 
