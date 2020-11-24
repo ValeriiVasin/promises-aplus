@@ -1,15 +1,18 @@
 {
-  "name": "my-promise-aplus",
+  "name": "promises-aplus",
   "version": "1.0.0",
   "private": true,
-  "description": "Implementation of Promises A+ spec",
+  "description": "Implementation of Promises/A+ specification",
   "main": "dist/promise.js",
   "scripts": {
     "pretest": "npm run build",
     "test": "promises-aplus-tests dist/adapter",
     "build": "tsc"
   },
-  "keywords": [],
+  "keywords": [
+    "promises",
+    "promises-aplus"
+  ],
   "author": "Valerii Vasin",
   "license": "ISC",
   "devDependencies": {

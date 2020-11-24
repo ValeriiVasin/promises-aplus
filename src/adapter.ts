@@ -5,14 +5,13 @@ process.on('unhandledRejection', noop);
 process.on('rejectionHandled', noop);
 
 import { MyPromise } from './promise';
-const Promise = MyPromise;
 
 export function resolved(value: any) {
-  return Promise.resolve(value);
+  return MyPromise.resolve(value);
 }
 
-export function rejected(reason: string) {
-  return Promise.reject(reason);
+export function rejected(reason: any) {
+  return MyPromise.reject(reason);
 }
 
 export function deferred() {
