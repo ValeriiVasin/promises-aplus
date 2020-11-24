@@ -8,110 +8,6 @@ enum PromiseState {
   Rejected,
 }
 
-export class MyPromise {
-  #result: any;
-  #state: PromiseState = PromiseState.Pending;
-  #resolvers: ResolveFn[] = [];
-  #rejectors: RejectFn[] = [];
-
-  static resolve(value?: any) {
-    return new MyPromise((resolve) => resolve(value));
-  }
-
-  static reject(reason?: any) {
-    return new MyPromise((_, reject) => reject(reason));
-  }
-
-  constructor(callback: PromiseCallback) {
-    const doResolve: ResolveFn = (value) => {
-      this.#state = PromiseState.Fulfilled;
-      this.#result = value;
-      this.check();
-    };
-
-    const doReject: RejectFn = (reason) => {
-      this.#state = PromiseState.Rejected;
-      this.#result = reason;
-      this.check();
-    };
-
-    const { resolve, reject } = wrapResolveReject({
-      resolve: (value) => {
-        resolvePromise({
-          promise: this,
-          value,
-          resolve: doResolve,
-          reject: doReject,
-        });
-      },
-      reject: doReject,
-    });
-
-    callback(resolve, reject);
-  }
-
-  then(onFulfilled?: any, onRejected?: any): MyPromise {
-    const promise = new MyPromise((resolve, reject) => {
-      const resolver: ResolveFn =
-        typeof onFulfilled === 'function'
-          ? (value) => {
-              try {
-                resolve(onFulfilled(value));
-              } catch (e) {
-                reject(e);
-              }
-            }
-          : resolve;
-
-      const rejector: RejectFn =
-        typeof onRejected === 'function'
-          ? (reason) => {
-              try {
-                resolvePromise({
-                  promise,
-                  value: onRejected(reason),
-                  resolve,
-                  reject,
-                });
-              } catch (e) {
-                reject(e);
-              }
-            }
-          : reject;
-
-      this.#resolvers.push(resolver);
-      this.#rejectors.push(rejector);
-      this.check();
-    });
-
-    return promise;
-  }
-
-  private check(options: { sync: boolean } = { sync: false }) {
-    if (!options.sync) {
-      setImmediate(() => this.check({ sync: true }));
-      return;
-    }
-
-    if (this.#state === PromiseState.Pending) {
-      return;
-    }
-
-    if (this.#state === PromiseState.Fulfilled) {
-      this.#rejectors = [];
-      while (this.#resolvers.length) {
-        this.#resolvers.shift()?.(this.#result);
-      }
-      return;
-    }
-
-    this.#resolvers = [];
-    while (this.#rejectors.length) {
-      this.#rejectors.shift()?.(this.#result);
-    }
-  }
-}
-
 /**
  * Promise resolution
  * https://github.com/promises-aplus/promises-spec#the-promise-resolution-procedure
@@ -201,4 +97,104 @@ function wrapResolveReject({
       reject(reason);
     },
   };
+}
+
+export class MyPromise {
+  #result: any;
+  #state: PromiseState = PromiseState.Pending;
+  #queue: Array<{ resolve: ResolveFn; reject: RejectFn }> = [];
+
+  static resolve(value?: any) {
+    return new MyPromise((resolve) => resolve(value));
+  }
+
+  static reject(reason?: any) {
+    return new MyPromise((_, reject) => reject(reason));
+  }
+
+  constructor(callback: PromiseCallback) {
+    const doResolve: ResolveFn = (value) => {
+      this.#state = PromiseState.Fulfilled;
+      this.#result = value;
+      this.processQueue();
+    };
+
+    const doReject: RejectFn = (reason) => {
+      this.#state = PromiseState.Rejected;
+      this.#result = reason;
+      this.processQueue();
+    };
+
+    const { resolve, reject } = wrapResolveReject({
+      resolve: (value) => {
+        resolvePromise({
+          promise: this,
+          value,
+          resolve: doResolve,
+          reject: doReject,
+        });
+      },
+      reject: doReject,
+    });
+
+    callback(resolve, reject);
+  }
+
+  then(onFulfilled?: any, onRejected?: any): MyPromise {
+    const promise = new MyPromise((resolve, reject) => {
+      const resolver: ResolveFn =
+        typeof onFulfilled === 'function'
+          ? (value) => {
+              try {
+                resolve(onFulfilled(value));
+              } catch (e) {
+                reject(e);
+              }
+            }
+          : resolve;
+
+      const rejector: RejectFn =
+        typeof onRejected === 'function'
+          ? (reason) => {
+              try {
+                resolvePromise({
+                  promise,
+                  value: onRejected(reason),
+                  resolve,
+                  reject,
+                });
+              } catch (e) {
+                reject(e);
+              }
+            }
+          : reject;
+
+      this.#queue.push({ resolve: resolver, reject: rejector });
+      this.processQueue();
+    });
+
+    return promise;
+  }
+
+  private processQueue(options: { sync: boolean } = { sync: false }) {
+    if (!options.sync) {
+      setTimeout(() => this.processQueue({ sync: true }), 0);
+      return;
+    }
+
+    if (this.#state === PromiseState.Pending) {
+      return;
+    }
+
+    while (this.#queue.length > 0) {
+      const { resolve, reject } = this.#queue.shift()!;
+
+      if (this.#state === PromiseState.Fulfilled) {
+        resolve(this.#result);
+        continue;
+      }
+
+      reject(this.#result);
+    }
+  }
 }
