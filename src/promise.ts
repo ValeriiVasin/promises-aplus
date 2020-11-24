@@ -40,7 +40,7 @@ export class MyPromise {
         resolveValue(value, {
           resolve: onResolve,
           reject: onReject,
-          getPromise: () => this,
+          promise: this,
         });
       },
       reject: onReject,
@@ -71,7 +71,7 @@ export class MyPromise {
                 resolveValue(onRejected(reason), {
                   resolve,
                   reject,
-                  getPromise,
+                  promise,
                 });
               } catch (e) {
                 reject(e);
@@ -118,15 +118,15 @@ function resolveValue(
   {
     resolve,
     reject,
-    getPromise,
-  }: { resolve: ResolveFn; reject: RejectFn; getPromise: () => MyPromise }
+    promise,
+  }: { resolve: ResolveFn; reject: RejectFn; promise: MyPromise }
 ) {
   const onResolve: ResolveFn = (value) =>
-    resolveValue(value, { resolve, reject, getPromise });
+    resolveValue(value, { resolve, reject, promise });
 
   const wrapped = wrapResolveReject({ resolve: onResolve, reject });
 
-  if (value === getPromise()) {
+  if (value === promise) {
     reject(new TypeError('Promise should not return itself'));
     return;
   }
