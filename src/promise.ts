@@ -42,16 +42,16 @@ export class MyPromise {
     const __resolve = (value: any) => {
       this.#state = PromiseState.Fulfilled;
       this.#value = value;
-      this.drain();
+      this.check();
     };
 
     const __reject = (reason: any) => {
       this.#state = PromiseState.Rejected;
       this.#value = reason;
-      this.drain();
+      this.check();
     };
 
-    const resolve: ResolveFn = once((value) => {
+    const resolve: ResolveFn = (value) => {
       if (!this.#isPending) {
         return;
       }
@@ -62,16 +62,16 @@ export class MyPromise {
         reject: __reject,
         getPromise: () => this,
       });
-    });
+    };
 
-    const reject: RejectFn = once((reason: any) => {
+    const reject: RejectFn = (reason: any) => {
       if (!this.#isPending) {
         return;
       }
 
       this.#isPending = false;
       __reject(reason);
-    });
+    };
 
     callback(resolve, reject);
   }
@@ -80,42 +80,46 @@ export class MyPromise {
     const promise = new MyPromise((resolve, reject) => {
       const getPromise = () => promise;
 
-      const resolver = (value: any) => {
-        try {
-          resolve(
-            typeof onFulfilled === 'function' ? onFulfilled(value) : value
-          );
-        } catch (e) {
-          reject(e);
-        }
-      };
+      const resolver =
+        typeof onFulfilled === 'function'
+          ? (value: any) => {
+              try {
+                resolve(onFulfilled(value));
+              } catch (e) {
+                reject(e);
+              }
+            }
+          : resolve;
 
-      const rejector = (reason: any) => {
-        if (typeof onRejected !== 'function') {
-          reject(reason);
-          return;
-        }
-
-        try {
-          resolveValue(onRejected(reason), { resolve, reject, getPromise });
-        } catch (e) {
-          reject(e);
-        }
-      };
+      const rejector =
+        typeof onRejected === 'function'
+          ? (reason: any) => {
+              try {
+                resolveValue(onRejected(reason), {
+                  resolve,
+                  reject,
+                  getPromise,
+                });
+              } catch (e) {
+                reject(e);
+              }
+            }
+          : reject;
 
       this.#resolvers.push(resolver);
       this.#catchers.push(rejector);
-      this.drain();
+      this.check();
     });
 
     return promise;
   }
 
-  private drain() {
-    setImmediate(() => this._drain());
-  }
+  private check(options: { async: boolean } = { async: true }) {
+    if (options.async) {
+      setImmediate(() => this.check({ async: false }));
+      return;
+    }
 
-  private _drain() {
     if (this.#state === PromiseState.Pending) {
       return;
     }
