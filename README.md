@@ -1,10 +1,10 @@
 # Promise A+
 
-Implementation of Promise/A+ specification.
+Implementation of Promises/A+ specification.
 
 _Educational purposes only._
 
-## Spec
+## Specification
 
 https://github.com/promises-aplus/promises-spec
 
