@@ -23,13 +23,13 @@ export class MyPromise {
   }
 
   constructor(callback: PromiseCallback) {
-    const onResolve: ResolveFn = (value) => {
+    const doResolve: ResolveFn = (value) => {
       this.#state = PromiseState.Fulfilled;
       this.#result = value;
       this.check();
     };
 
-    const onReject: RejectFn = (reason) => {
+    const doReject: RejectFn = (reason) => {
       this.#state = PromiseState.Rejected;
       this.#result = reason;
       this.check();
@@ -37,13 +37,14 @@ export class MyPromise {
 
     const { resolve, reject } = wrapResolveReject({
       resolve: (value) => {
-        resolveValue(value, {
-          resolve: onResolve,
-          reject: onReject,
+        resolvePromise({
           promise: this,
+          value,
+          resolve: doResolve,
+          reject: doReject,
         });
       },
-      reject: onReject,
+      reject: doReject,
     });
 
     callback(resolve, reject);
@@ -51,8 +52,6 @@ export class MyPromise {
 
   then(onFulfilled?: any, onRejected?: any): MyPromise {
     const promise = new MyPromise((resolve, reject) => {
-      const getPromise = () => promise;
-
       const resolver: ResolveFn =
         typeof onFulfilled === 'function'
           ? (value) => {
@@ -68,10 +67,11 @@ export class MyPromise {
         typeof onRejected === 'function'
           ? (reason) => {
               try {
-                resolveValue(onRejected(reason), {
+                resolvePromise({
+                  promise,
+                  value: onRejected(reason),
                   resolve,
                   reject,
-                  promise,
                 });
               } catch (e) {
                 reject(e);
@@ -113,19 +113,17 @@ export class MyPromise {
 }
 
 // https://github.com/promises-aplus/promises-spec#the-promise-resolution-procedure
-function resolveValue(
-  value: any,
-  {
-    resolve,
-    reject,
-    promise,
-  }: { resolve: ResolveFn; reject: RejectFn; promise: MyPromise }
-) {
-  const onResolve: ResolveFn = (value) =>
-    resolveValue(value, { resolve, reject, promise });
-
-  const wrapped = wrapResolveReject({ resolve: onResolve, reject });
-
+function resolvePromise({
+  value,
+  promise,
+  resolve,
+  reject,
+}: {
+  promise: MyPromise;
+  value: any;
+  resolve: ResolveFn;
+  reject: RejectFn;
+}) {
   if (value === promise) {
     reject(new TypeError('Promise should not return itself'));
     return;
@@ -141,10 +139,19 @@ function resolveValue(
       let then = value.then;
 
       if (typeof then === 'function') {
+        const {
+          resolve: wrappedResolve,
+          reject: wrappedReject,
+        } = wrapResolveReject({
+          resolve: (value) =>
+            resolvePromise({ promise, value, resolve, reject }),
+          reject,
+        });
+
         try {
-          then.call(value, wrapped.resolve, wrapped.reject);
+          then.call(value, wrappedResolve, wrappedReject);
         } catch (e) {
-          wrapped.reject(e);
+          wrappedReject(e);
         }
         return;
       }
