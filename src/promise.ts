@@ -87,9 +87,9 @@ export class MyPromise {
     return promise;
   }
 
-  private check(options: { async: boolean } = { async: true }) {
-    if (options.async) {
-      setImmediate(() => this.check({ async: false }));
+  private check(options: { sync: boolean } = { sync: false }) {
+    if (!options.sync) {
+      setImmediate(() => this.check({ sync: true }));
       return;
     }
 
