@@ -112,7 +112,13 @@ export class MyPromise {
   }
 }
 
-// https://github.com/promises-aplus/promises-spec#the-promise-resolution-procedure
+/**
+ * Promise resolution
+ * https://github.com/promises-aplus/promises-spec#the-promise-resolution-procedure
+ *
+ * We do need to pass resolve/reject privileged methods
+ * because promise does not expose them publicly
+ */
 function resolvePromise({
   value,
   promise,
