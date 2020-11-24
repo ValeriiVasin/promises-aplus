@@ -1,4 +1,3 @@
-type TOptFunc = null | undefined | ((v: any) => any);
 type RejectFn = (reason?: any) => any;
 type ResolveFn = (value?: any) => any;
 type PromiseCallback = (resolve: ResolveFn, reject: RejectFn) => any;
@@ -7,20 +6,6 @@ enum PromiseState {
   Pending,
   Fulfilled,
   Rejected,
-}
-
-function once<T extends (...args: any[]) => any>(fn: T) {
-  let result: ReturnType<T>;
-  let wasCalled = false;
-
-  return (...args: Parameters<T>): ReturnType<T> => {
-    if (wasCalled) {
-      return result;
-    }
-    wasCalled = true;
-    result = fn(...args);
-    return result;
-  };
 }
 
 export class MyPromise {
@@ -64,7 +49,7 @@ export class MyPromise {
     callback(resolve, reject);
   }
 
-  then(onFulfilled?: TOptFunc, onRejected?: TOptFunc): MyPromise {
+  then(onFulfilled?: any, onRejected?: any): MyPromise {
     const promise = new MyPromise((resolve, reject) => {
       const getPromise = () => promise;
 
