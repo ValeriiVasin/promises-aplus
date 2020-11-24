@@ -24,12 +24,10 @@ function once<T extends (...args: any[]) => any>(fn: T) {
 }
 
 export class MyPromise {
-  #value: any;
-  #isPending = true;
+  #result: any;
   #state: PromiseState = PromiseState.Pending;
-
   #resolvers: ResolveFn[] = [];
-  #catchers: RejectFn[] = [];
+  #rejectors: RejectFn[] = [];
 
   static resolve(value?: any) {
     return new MyPromise((resolve) => resolve(value));
@@ -40,39 +38,28 @@ export class MyPromise {
   }
 
   constructor(callback: PromiseCallback) {
-    const __resolve = (value: any) => {
+    const onResolve: ResolveFn = (value) => {
       this.#state = PromiseState.Fulfilled;
-      this.#value = value;
+      this.#result = value;
       this.check();
     };
 
-    const __reject = (reason: any) => {
+    const onReject: RejectFn = (reason) => {
       this.#state = PromiseState.Rejected;
-      this.#value = reason;
+      this.#result = reason;
       this.check();
     };
 
-    const resolve: ResolveFn = (value) => {
-      if (!this.#isPending) {
-        return;
-      }
-
-      this.#isPending = false;
-      resolveValue(value, {
-        resolve: __resolve,
-        reject: __reject,
-        getPromise: () => this,
-      });
-    };
-
-    const reject: RejectFn = (reason: any) => {
-      if (!this.#isPending) {
-        return;
-      }
-
-      this.#isPending = false;
-      __reject(reason);
-    };
+    const { resolve, reject } = wrapResolveReject({
+      resolve: (value) => {
+        resolveValue(value, {
+          resolve: onResolve,
+          reject: onReject,
+          getPromise: () => this,
+        });
+      },
+      reject: onReject,
+    });
 
     callback(resolve, reject);
   }
@@ -81,9 +68,9 @@ export class MyPromise {
     const promise = new MyPromise((resolve, reject) => {
       const getPromise = () => promise;
 
-      const resolver =
+      const resolver: ResolveFn =
         typeof onFulfilled === 'function'
-          ? (value: any) => {
+          ? (value) => {
               try {
                 resolve(onFulfilled(value));
               } catch (e) {
@@ -92,9 +79,9 @@ export class MyPromise {
             }
           : resolve;
 
-      const rejector =
+      const rejector: RejectFn =
         typeof onRejected === 'function'
-          ? (reason: any) => {
+          ? (reason) => {
               try {
                 resolveValue(onRejected(reason), {
                   resolve,
@@ -108,7 +95,7 @@ export class MyPromise {
           : reject;
 
       this.#resolvers.push(resolver);
-      this.#catchers.push(rejector);
+      this.#rejectors.push(rejector);
       this.check();
     });
 
@@ -126,16 +113,16 @@ export class MyPromise {
     }
 
     if (this.#state === PromiseState.Fulfilled) {
-      this.#catchers = [];
+      this.#rejectors = [];
       while (this.#resolvers.length) {
-        this.#resolvers.shift()?.(this.#value);
+        this.#resolvers.shift()?.(this.#result);
       }
       return;
     }
 
     this.#resolvers = [];
-    while (this.#catchers.length) {
-      this.#catchers.shift()?.(this.#value);
+    while (this.#rejectors.length) {
+      this.#rejectors.shift()?.(this.#result);
     }
   }
 }
@@ -149,18 +136,17 @@ function resolveValue(
     getPromise,
   }: { resolve: ResolveFn; reject: RejectFn; getPromise: () => MyPromise }
 ) {
+  const onResolve: ResolveFn = (value) =>
+    resolveValue(value, { resolve, reject, getPromise });
+
+  const wrapped = wrapResolveReject({ resolve: onResolve, reject });
+
+  if (value === getPromise()) {
+    reject(new TypeError('Promise should not return itself'));
+    return;
+  }
+
   try {
-    const onResolve = (value: any) =>
-      resolveValue(value, { resolve, reject, getPromise });
-
-    const wrapped = wrapResolveReject({ resolve: onResolve, reject });
-
-    const promise = getPromise();
-    if (value === promise) {
-      reject(new TypeError('Promise should not return itself'));
-      return;
-    }
-
     if (value instanceof MyPromise) {
       value.then(resolve, reject);
       return;
@@ -188,11 +174,9 @@ function resolveValue(
   }
 }
 
-// inside of value resolution function for thenable
-// we should:
-// - global control that only reject or resolved called
-// - it is called only once
-// - if it throws inside of `.then()` call, but was resolved before - ignore
+// when resolve/reject is called - it sets promise into
+// "fulfilled" or "rejected" state. All the consequent calls
+// are not influencing the result
 function wrapResolveReject({
   resolve,
   reject,
@@ -201,27 +185,22 @@ function wrapResolveReject({
   reject: RejectFn;
 }): { resolve: ResolveFn; reject: RejectFn } {
   let isDone = false;
-
-  const wrappedResolve = once((...args: any[]) => {
-    if (isDone) {
-      return;
-    }
-
-    isDone = true;
-    resolve(...args);
-  });
-
-  const wrappedReject = once((...args: any[]) => {
-    if (isDone) {
-      return;
-    }
-
-    isDone = true;
-    reject(...args);
-  });
-
   return {
-    resolve: wrappedResolve,
-    reject: wrappedReject,
+    resolve: (value) => {
+      if (isDone) {
+        return;
+      }
+
+      isDone = true;
+      resolve(value);
+    },
+    reject: (reason) => {
+      if (isDone) {
+        return;
+      }
+
+      isDone = true;
+      reject(reason);
+    },
   };
 }
