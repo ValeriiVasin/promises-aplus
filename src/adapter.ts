@@ -4,14 +4,14 @@ function noop() {}
 process.on('unhandledRejection', noop);
 process.on('rejectionHandled', noop);
 
-import { MyPromise } from './promise';
+import { Promise } from './promise';
 
 export function resolved(value: any) {
-  return MyPromise.resolve(value);
+  return Promise.resolve(value);
 }
 
 export function rejected(reason: any) {
-  return MyPromise.reject(reason);
+  return Promise.reject(reason);
 }
 
 export function deferred() {

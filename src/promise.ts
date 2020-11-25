@@ -1,115 +1,18 @@
-type RejectFn = (reason?: any) => any;
-type ResolveFn = (value?: any) => any;
-type PromiseCallback = (resolve: ResolveFn, reject: RejectFn) => any;
+import { resolvePromise } from './helpers/resolve-promise';
+import { wrapResolveReject } from './helpers/wrap-resolve-reject';
+import { PromiseCallback, PromiseState, RejectFn, ResolveFn } from './types';
 
-enum PromiseState {
-  Pending,
-  Fulfilled,
-  Rejected,
-}
-
-/**
- * Promise resolution
- * https://github.com/promises-aplus/promises-spec#the-promise-resolution-procedure
- *
- * We do need to pass resolve/reject privileged methods
- * because promise does not expose them publicly
- */
-function resolvePromise({
-  value,
-  promise,
-  resolve,
-  reject,
-}: {
-  promise: MyPromise;
-  value: any;
-  resolve: ResolveFn;
-  reject: RejectFn;
-}) {
-  if (value === promise) {
-    reject(new TypeError('Promise should not return itself'));
-    return;
-  }
-
-  try {
-    if (value instanceof MyPromise) {
-      value.then(resolve, reject);
-      return;
-    }
-
-    if ((value && typeof value === 'object') || typeof value === 'function') {
-      let then = value.then;
-
-      if (typeof then === 'function') {
-        const {
-          resolve: wrappedResolve,
-          reject: wrappedReject,
-        } = wrapResolveReject({
-          resolve: (value) =>
-            resolvePromise({ promise, value, resolve, reject }),
-          reject,
-        });
-
-        try {
-          then.call(value, wrappedResolve, wrappedReject);
-        } catch (e) {
-          wrappedReject(e);
-        }
-        return;
-      }
-
-      resolve(value);
-      return;
-    }
-
-    resolve(value);
-  } catch (e) {
-    reject(e);
-  }
-}
-
-// when resolve/reject is called - it sets promise into
-// "fulfilled" or "rejected" state. All the consequent calls
-// are not influencing the result
-function wrapResolveReject({
-  resolve,
-  reject,
-}: {
-  resolve: ResolveFn;
-  reject: RejectFn;
-}): { resolve: ResolveFn; reject: RejectFn } {
-  let isDone = false;
-  return {
-    resolve: (value) => {
-      if (isDone) {
-        return;
-      }
-
-      isDone = true;
-      resolve(value);
-    },
-    reject: (reason) => {
-      if (isDone) {
-        return;
-      }
-
-      isDone = true;
-      reject(reason);
-    },
-  };
-}
-
-export class MyPromise {
+export class Promise {
   #result: any;
   #state: PromiseState = PromiseState.Pending;
   #queue: Array<{ resolve: ResolveFn; reject: RejectFn }> = [];
 
   static resolve(value?: any) {
-    return new MyPromise((resolve) => resolve(value));
+    return new Promise((resolve) => resolve(value));
   }
 
   static reject(reason?: any) {
-    return new MyPromise((_, reject) => reject(reason));
+    return new Promise((_, reject) => reject(reason));
   }
 
   constructor(callback: PromiseCallback) {
@@ -140,15 +43,15 @@ export class MyPromise {
     callback(resolve, reject);
   }
 
-  then(onFulfilled?: any, onRejected?: any): MyPromise {
-    const promise = new MyPromise((resolve, reject) => {
+  then(onFulfilled?: any, onRejected?: any): Promise {
+    const promise = new Promise((resolve, reject) => {
       const resolver: ResolveFn =
         typeof onFulfilled === 'function'
           ? (value) => {
               try {
                 resolve(onFulfilled(value));
-              } catch (e) {
-                reject(e);
+              } catch (error) {
+                reject(error);
               }
             }
           : resolve;
@@ -163,8 +66,8 @@ export class MyPromise {
                   resolve,
                   reject,
                 });
-              } catch (e) {
-                reject(e);
+              } catch (error) {
+                reject(error);
               }
             }
           : reject;
